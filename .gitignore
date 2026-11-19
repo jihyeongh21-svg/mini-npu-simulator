@@ -1,1 +1,4 @@
 *:Zone.Identifier
+gen_sample.py
+data.json
+__pycache__/

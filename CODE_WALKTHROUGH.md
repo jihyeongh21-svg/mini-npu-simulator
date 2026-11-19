@@ -21,6 +21,8 @@ main()
 | 모드 | `read_matrix`, `mode_user_input`, `performance_table`, `mode_json` | 사용자와 상호작용, 출력 |
 | 보너스 | `make_cross`, `make_x` | N×N 패턴 생성 |
 
+코드에는 섹션 구분 주석(`# ---------- ... ----------`)과 "왜 이렇게 했는지"를 적은 주석이 달려 있습니다. 이 문서와 함께 `main.py`를 위에서부터 읽으면 같은 순서로 따라갈 수 있습니다.
+
 설계 원칙은 두 가지입니다. 계산 함수는 print/input을 하지 않아 시간 측정에 I/O가 섞이지 않고, 오류는 `ValueError`로 올려서 맨 바깥(케이스 단위)에서 한 번에 잡습니다.
 
 ## 1. 상수와 import
@@ -128,6 +130,19 @@ return (time.perf_counter() - start) / repeat * 1000.0
 
 필터 가중치가 우연히 맞아떨어진 동점이라 코드 결함이 아닙니다.
 
+### 제공된 data.json 6건 전체 추적
+
+| 케이스 | 입력 모양 | Cross | X | 판정 | expected | 결과 | 이유 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| size_5_1 | X | 0.9 | 0.9 | UNDECIDED | x | FAIL | 동점 |
+| size_5_2 | 십자가 | 8.9 | 0.1 | Cross | + | PASS | |
+| size_13_1 | X | 0.3 | 14.7 | X | x | PASS | |
+| size_13_2 | 십자가 | 7.5 | 7.5 | UNDECIDED | + | FAIL | 동점 |
+| size_25_1 | X | 4.9 | 4.9 | UNDECIDED | x | FAIL | 동점 |
+| size_25_2 | 십자가 | 52.9 | 0.1 | Cross | + | PASS | |
+
+읽는 법: PASS 케이스는 점수 차이가 크고(8.9 vs 0.1), FAIL 케이스는 두 점수가 정확히 같습니다. 즉 "틀린 판정"이 아니라 "판정할 수 없음"이 실패 원인입니다.
+
 ## 9. 모드 1: read_matrix와 mode_user_input
 
 - `read_matrix`는 `n`줄을 읽어 `split()`으로 쪼개고, 개수가 `n`이 아니면 `ValueError`, 숫자 변환 실패(`float`)도 `ValueError`입니다.
@@ -171,3 +186,15 @@ make_x:     1 if (i == j or i + j == n - 1) else 0   # 두 대각선
 | 모드 1 오류 입력 시 재입력 | `read_matrix`의 while 루프 |
 | 10회 반복 평균, I/O 제외 | `measure_mac` |
 | 총/통과/실패와 실패 목록 | `mode_json` 마지막 블록 |
+
+## 14. 직접 해보기 (이해 확인)
+
+1. `EPSILON`을 `1e-9`에서 `1`로 키우면 어떤 케이스의 판정이 바뀌는지 예상한 뒤 실행해 보세요. (점수 차가 1 미만인 케이스가 UNDECIDED가 됩니다.)
+2. `judge_scores`에서 동점 검사와 비교 검사의 순서를 바꾸면 `size_5_1`이 어떻게 되는지 확인해 보세요. (동점이 B=X로 판정되어 우연히 PASS가 되는 버그입니다.)
+3. `data.json`의 `size_5_2` 입력 한 칸을 다른 크기 행으로 바꿔 `validate_matrix`가 어떤 사유를 출력하는지 보세요.
+4. `mac`의 곱셈 부분에 `print(i, j, pattern[i][j] * filt[i][j])`를 임시로 넣어 누적 과정을 눈으로 확인해 보세요. (확인 후 지우세요. 측정 시간에 I/O가 섞입니다.)
+
+## 15. 더 읽어볼 자료
+
+- 새 라벨(패턴) 추가 방법: [README.md](README.md)의 "새 라벨(패턴) 확장 절차"
+- 대규모 데이터 최적화: [README.md](README.md)의 "대규모 확장 시 최적화 전략"

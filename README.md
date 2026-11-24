@@ -13,6 +13,8 @@ python3 main.py   # 1: 사용자 입력(3x3), 2: data.json 분석
 
 ## 구조
 
+프로젝트 전체 정리(평가 항목별 근거와 구두 설명 준비)는 [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)를 참고하세요.
+
 함수별 단계 설명은 [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md)를 참고하세요.
 
 | 함수 | 역할 |

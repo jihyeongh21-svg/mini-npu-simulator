@@ -115,6 +115,7 @@ def evaluate_case(name, case, filters):
         if not isinstance(case, dict) or "input" not in case or "expected" not in case:
             raise ValueError("'input'/'expected' 키 누락")
         expected = normalize_label(case["expected"])
+        info["expected"] = expected
         # 3) 입력 패턴이 N x N 숫자 행렬인지 검증 (MAC 전에 걸러야 IndexError 방지)
         pattern = case["input"]
         validate_matrix(pattern, size)
@@ -128,7 +129,7 @@ def evaluate_case(name, case, filters):
         info["judge"] = judged
         # 5) expected와 비교. UNDECIDED는 항상 FAIL
         if judged == "UNDECIDED":
-            info["reason"] = "동점(|Cross-X| < %g) -> UNDECIDED, expected와 비교 시 FAIL" % EPSILON
+            info["reason"] = "동점(|Cross-X| = %.3g < %g) -> UNDECIDED, expected와 비교 시 FAIL" % (abs(sc - sx), EPSILON)
         elif judged == expected:
             info["pass"] = True
         else:
@@ -137,6 +138,18 @@ def evaluate_case(name, case, filters):
         # 어떤 검증 오류든 이 케이스만 FAIL로 기록하고 다음 케이스로 계속 진행
         info["reason"] = str(e)
     return info
+
+
+# ---------- 출력 보조 ----------
+def section(title):
+    print("\n#" + "-" * 39)
+    print("# " + title)
+    print("#" + "-" * 39)
+
+
+def fmt(score):
+    """점수를 반올림 없이 출력 (예: 1.0, 0.8999999999999999). 부동소수점 오차가 보이게."""
+    return repr(float(score))
 
 
 # ---------- 모드 1: 사용자 입력 (3x3) ----------
@@ -156,34 +169,47 @@ def read_matrix(prompt, n=3):
                         return generated
                 line = text.split()
                 if len(line) != n:  # 열 수 불일치
-                    raise ValueError("각 줄은 %d개 숫자여야 합니다 (입력 %d개)" % (n, len(line)))
-                rows.append([float(x) for x in line])  # 숫자 변환 실패도 ValueError
+                    raise ValueError("각 줄에 %d개의 숫자를 공백으로 구분해 입력하세요 (입력 %d개)" % (n, len(line)))
+                try:
+                    rows.append([float(x) for x in line])
+                except ValueError:  # 숫자 변환 실패
+                    raise ValueError("숫자가 아닌 값이 있습니다. 각 줄에 %d개의 숫자를 공백으로 구분해 입력하세요" % n)
             return rows
         except ValueError as e:
-            print("입력 오류: %s. 처음부터 다시 입력하세요." % e)
+            print("입력 형식 오류: %s. %d줄을 처음부터 다시 입력하세요." % (e, n))
 
 
 def mode_user_input():
-    fa = read_matrix("필터 A (3줄, 공백 구분):")
-    fb = read_matrix("필터 B (3줄, 공백 구분):")
-    pt = read_matrix("패턴 (3줄, 공백 구분):")
+    section("[1] 필터 입력")
+    fa = read_matrix("필터 A (3줄 입력, 공백 구분)")
+    print("✓ 필터 A 저장 완료")
+    fb = read_matrix("필터 B (3줄 입력, 공백 구분)")
+    print("✓ 필터 B 저장 완료")
+    section("[2] 패턴 입력")
+    pt = read_matrix("패턴 (3줄 입력, 공백 구분)")
+    print("✓ 패턴 저장 완료")
     sa, sb = mac(pt, fa), mac(pt, fb)
     ms = measure_mac(pt, fa)  # 시간 측정은 입력이 끝난 뒤, MAC만 대상으로
-    print("A 점수: %g / B 점수: %g / 연산 시간: %.4f ms" % (sa, sb, ms))
+    section("[3] MAC 결과")
+    print("A 점수: " + fmt(sa))
+    print("B 점수: " + fmt(sb))
+    print("연산 시간(평균/10회): %.4f ms" % ms)
     res = judge_scores(sa, sb)
-    print("판정: " + ("판정 불가 (UNDECIDED)" if res == "UNDECIDED" else res))
+    print("판정: " + ("판정 불가 (|A-B| < %g)" % EPSILON if res == "UNDECIDED" else res))
+    section("[4] 성능 분석 (3x3, 평균/10회)")
+    performance_table({}, (3,), header=False)
 
 
 # ---------- 모드 2: data.json 분석 ----------
-def performance_table(filters):
+def performance_table(filters, sizes=(3, 5, 13, 25), header=True):
     """크기별 MAC 평균 시간(10회)과 연산 횟수(N^2) 표 출력."""
-    print("\n=== 성능 분석 (10회 반복 평균) ===")
-    print("%-8s %-18s %s" % ("크기", "평균 시간(ms)", "연산 횟수(N^2)"))
-    for n in (3, 5, 13, 25):
+    print("%-8s %-14s %s" % ("크기", "평균 시간(ms)", "연산 횟수(N^2)"))
+    print("-" * 40)
+    for n in sizes:
         pat = make_x(n)  # 생성기로 만든 N x N X 패턴으로 측정
         # data.json에 해당 크기 필터가 없으면(예: 3x3) 생성기로 대체
         filt = filters.get(n, {}).get("Cross") or make_cross(n)
-        print("%-8s %-18.4f %d" % ("%dx%d" % (n, n), measure_mac(pat, filt), n * n))
+        print("%-8s %-14.4f %d" % ("%dx%d" % (n, n), measure_mac(pat, filt), n * n))
 
 
 def mode_json(path=DATA_FILE):
@@ -198,21 +224,35 @@ def mode_json(path=DATA_FILE):
     except (OSError, ValueError) as e:
         print("data.json 로드 실패: %s" % e)
         return
-    # 케이스별 평가 및 한 줄 출력
+    section("[1] 필터 로드")
+    for n in sorted(filters):
+        print("✓ size_%d 필터 로드 완료 (Cross, X)" % n)
+    section("[2] 패턴 분석 (라벨 정규화 적용)")
     results = []
     for name, case in patterns.items():
         r = evaluate_case(name, case, filters)
         results.append(r)
-        sc = "" if r["scores"] is None else " Cross=%g X=%g 판정=%s" % (*r["scores"], r["judge"])
-        print("[%s] %s%s %s" % ("PASS" if r["pass"] else "FAIL", name, sc, r["reason"]))
+        print("--- %s ---" % name)
+        if r["scores"] is not None:
+            print("Cross 점수: " + fmt(r["scores"][0]))
+            print("X 점수: " + fmt(r["scores"][1]))
+            print("판정: %s | expected: %s | %s" % (r["judge"], r.get("expected", "-"), "PASS" if r["pass"] else "FAIL"))
+        else:
+            print("판정: - | %s" % "FAIL")
+        if r["reason"]:
+            print("사유: " + r["reason"])
+    section("[3] 성능 분석 (평균/10회)")
     performance_table(filters)
-    flat_comparison_table()
-    # 결과 리포트: 총/통과/실패 수와 실패 케이스 목록
     fails = [r for r in results if not r["pass"]]
-    print("\n=== 결과 리포트 ===")
-    print("총 %d / 통과 %d / 실패 %d" % (len(results), len(results) - len(fails), len(fails)))
-    for r in fails:
-        print(" - %s: %s" % (r["name"], r["reason"]))
+    section("[4] 결과 요약")
+    print("총 테스트: %d개" % len(results))
+    print("통과: %d개" % (len(results) - len(fails)))
+    print("실패: %d개" % len(fails))
+    if fails:
+        print("\n실패 케이스:")
+        for r in fails:
+            print("- %s: %s" % (r["name"], r["reason"]))
+    flat_comparison_table()  # 보너스: 결과 요약 아래
 
 
 # ---------- 보너스: 패턴 생성기 (홀수 N 기준) ----------

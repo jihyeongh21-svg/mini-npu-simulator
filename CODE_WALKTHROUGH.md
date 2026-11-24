@@ -141,7 +141,7 @@ return (time.perf_counter() - start) / repeat * 1000.0
 | size_25_1 | X | 4.9 | 4.9 | UNDECIDED | x | FAIL | 동점 |
 | size_25_2 | 십자가 | 52.9 | 0.1 | Cross | + | PASS | |
 
-읽는 법: PASS 케이스는 점수 차이가 크고(8.9 vs 0.1), FAIL 케이스는 두 점수가 정확히 같습니다. 즉 "틀린 판정"이 아니라 "판정할 수 없음"이 실패 원인입니다.
+읽는 법: PASS 케이스는 점수 차이가 크고(8.9 vs 0.1), FAIL 케이스는 두 점수가 수학적으로 같고 부동소수점 오차(1e-16~1e-15)만큼만 다릅니다. 즉 "틀린 판정"이 아니라 "판정할 수 없음"이 실패 원인입니다.
 
 ## 9. 모드 1: read_matrix와 mode_user_input
 

@@ -45,12 +45,12 @@ def judge_scores(score_a, score_b, name_a="A", name_b="B"):
     return name_a if score_a > score_b else name_b
 
 
-def measure_mac(pattern, filt, repeat=10):
-    """I/O를 제외하고 MAC만 repeat회 반복한 평균 시간(ms)."""
+def measure_mac(pattern, filt, repeat=10, fn=mac):
+    """I/O를 제외하고 MAC(fn)만 repeat회 반복한 평균 시간(ms)."""
     # perf_counter: 짧은 구간 측정용 고해상도 타이머
     start = time.perf_counter()
     for _ in range(repeat):
-        mac(pattern, filt)
+        fn(pattern, filt)
     # 총 시간 / 반복 횟수 = 평균(초), * 1000 = ms
     return (time.perf_counter() - start) / repeat * 1000.0
 
@@ -198,6 +198,7 @@ def mode_json(path=DATA_FILE):
         sc = "" if r["scores"] is None else " Cross=%g X=%g 판정=%s" % (*r["scores"], r["judge"])
         print("[%s] %s%s %s" % ("PASS" if r["pass"] else "FAIL", name, sc, r["reason"]))
     performance_table(filters)
+    flat_comparison_table()
     # 결과 리포트: 총/통과/실패 수와 실패 케이스 목록
     fails = [r for r in results if not r["pass"]]
     print("\n=== 결과 리포트 ===")
@@ -216,6 +217,45 @@ def make_cross(n):
 def make_x(n):
     """두 대각선이 1인 X 패턴."""
     return [[1 if (i == j or i + j == n - 1) else 0 for j in range(n)] for i in range(n)]
+
+
+# ---------- 보너스: 1차원 배열 최적화 ----------
+def flatten(m):
+    """N x N 2차원 리스트를 길이 N*N 1차원 리스트로 펼친다 (행 우선)."""
+    flat = []
+    for row in m:
+        flat.extend(row)
+    return flat
+
+
+def mac_flat(pattern_flat, filter_flat):
+    """1차원 버전 MAC. 인덱스 [i][j] 이중 접근과 안쪽 루프 설정이 사라진다.
+    결과는 mac()과 같고 연산 횟수도 N^2으로 같다 (상수 배만 줄어듦)."""
+    total = 0.0
+    for a, b in zip(pattern_flat, filter_flat):
+        total += a * b
+    return total
+
+
+def flat_comparison_table(repeat=100):
+    """2차원 mac vs 1차원 mac_flat 전후 비교. 펼치는 비용은 따로 표시한다.
+    필터는 한 번만 펼쳐 재사용하므로 '펼침 제외'가 반복 판정 시의 실제 비용이다."""
+    print("\n=== 보너스: 1차원 배열 최적화 비교 (%d회 반복 평균) ===" % repeat)
+    print("%-8s %-12s %-12s %-12s %-8s %s" % ("크기", "2차원(ms)", "1차원(ms)", "펼침(ms)", "배율", "결과 일치"))
+    for n in (3, 5, 13, 25):
+        pat = [[(i * n + j) % 3 * 0.5 for j in range(n)] for i in range(n)]
+        filt = make_cross(n)
+        pf, ff = flatten(pat), flatten(filt)
+        t2 = measure_mac(pat, filt, repeat)
+        t1 = measure_mac(pf, ff, repeat, fn=mac_flat)
+        # 펼치는 데 걸리는 시간 (패턴마다 한 번 필요)
+        start = time.perf_counter()
+        for _ in range(repeat):
+            flatten(pat)
+        tf = (time.perf_counter() - start) / repeat * 1000.0
+        same = abs(mac(pat, filt) - mac_flat(pf, ff)) < EPSILON
+        print("%-8s %-12.4f %-12.4f %-12.4f %-8s %s" % (
+            "%dx%d" % (n, n), t2, t1, tf, "%.2fx" % (t2 / t1), "O" if same else "X"))
 
 
 # ---------- 진입점 ----------

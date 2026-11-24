@@ -8,6 +8,17 @@ MAC(Multiply-Accumulate) 연산을 순수 Python(표준 라이브러리만)으�
 python3 main.py   # 1: 사용자 입력(3x3), 2: data.json 분석
 ```
 
+패턴 생성기: 크기 N을 주면 N×N 십자가(Cross)와 X 패턴을 자동 생성해 출력합니다.
+
+```bash
+python3 main.py --gen 5   # N을 생략하면 입력을 요청합니다
+```
+
+- 출력은 공백 구분 숫자라 모드 1에 그대로 붙여넣을 수 있습니다.
+- 모드 1에서는 각 행렬의 첫 줄에 `cross` 또는 `x`를 입력하면 3×3 패턴이 자동 생성됩니다. 직접 입력과 섞어 쓸 수 있습니다.
+- 성능 분석(모드 2의 성능 표, 1차원 비교)은 생성기로 만든 N×N 패턴으로 측정합니다.
+- 짝수 N의 십자가는 가운데 2줄을 모두 채워 대칭을 유지합니다.
+
 모드 2는 `main.py`와 같은 폴더의 `data.json`을 읽습니다.
 스키마: `filters.size_N.{cross|+, x}` (N×N 배열), `patterns.size_N_idx.{input, expected}`.
 
@@ -24,7 +35,7 @@ python3 main.py   # 1: 사용자 입력(3x3), 2: data.json 분석
 | `judge_scores` | epsilon(1e-9) 이내면 UNDECIDED |
 | `measure_mac` | I/O 제외, 10회 반복 평균(ms) |
 | `load_filters` / `evaluate_case` | 스키마·크기 검증, 케이스 단위 오류 처리 |
-| `make_cross` / `make_x` | 보너스: N×N 패턴 생성기 |
+| `make_cross` / `make_x` | 보너스: N×N 패턴 생성기 (`--gen`, 모드 1, 성능 분석에서 재사용) |
 | `flatten` / `mac_flat` / `flat_comparison_table` | 보너스: 1차원 배열 최적화와 전후 성능 비교 |
 
 ## 결과 리포트 (제공된 data.json 기준)

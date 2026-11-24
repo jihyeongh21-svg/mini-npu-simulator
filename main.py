@@ -5,6 +5,7 @@
 import json
 import os
 import re
+import sys
 import time
 
 # 두 점수의 차이가 이 값보다 작으면 동점으로 본다.
@@ -141,12 +142,19 @@ def evaluate_case(name, case, filters):
 # ---------- 모드 1: 사용자 입력 (3x3) ----------
 def read_matrix(prompt, n=3):
     """n줄을 읽어 n x n 실수 행렬로 반환. 형식 오류면 안내 후 처음부터 재입력."""
-    print(prompt)
+    print(prompt + "  (첫 줄에 cross 또는 x 를 입력하면 자동 생성)")
     while True:
         rows = []
         try:
-            for _ in range(n):
-                line = input().split()
+            for k in range(n):
+                text = input().strip()
+                if k == 0:
+                    generated = generate_by_name(text, n)
+                    if generated is not None:  # 생성기 재사용
+                        print("자동 생성 (%s %dx%d):" % (text, n, n))
+                        print_matrix(generated)
+                        return generated
+                line = text.split()
                 if len(line) != n:  # 열 수 불일치
                     raise ValueError("각 줄은 %d개 숫자여야 합니다 (입력 %d개)" % (n, len(line)))
                 rows.append([float(x) for x in line])  # 숫자 변환 실패도 ValueError
@@ -172,7 +180,7 @@ def performance_table(filters):
     print("\n=== 성능 분석 (10회 반복 평균) ===")
     print("%-8s %-18s %s" % ("크기", "평균 시간(ms)", "연산 횟수(N^2)"))
     for n in (3, 5, 13, 25):
-        pat = [[1.0] * n for _ in range(n)]  # 측정용 더미 패턴
+        pat = make_x(n)  # 생성기로 만든 N x N X 패턴으로 측정
         # data.json에 해당 크기 필터가 없으면(예: 3x3) 생성기로 대체
         filt = filters.get(n, {}).get("Cross") or make_cross(n)
         print("%-8s %-18.4f %d" % ("%dx%d" % (n, n), measure_mac(pat, filt), n * n))
@@ -209,9 +217,9 @@ def mode_json(path=DATA_FILE):
 
 # ---------- 보너스: 패턴 생성기 (홀수 N 기준) ----------
 def make_cross(n):
-    """가운데 행과 열이 1인 십자가 패턴."""
-    c = n // 2
-    return [[1 if (i == c or j == c) else 0 for j in range(n)] for i in range(n)]
+    """가운데 행과 열이 1인 십자가 패턴. 짝수 N은 가운데 2줄을 모두 채워 대칭을 유지한다."""
+    mids = {n // 2} if n % 2 else {n // 2 - 1, n // 2}
+    return [[1 if (i in mids or j in mids) else 0 for j in range(n)] for i in range(n)]
 
 
 def make_x(n):
@@ -243,7 +251,7 @@ def flat_comparison_table(repeat=100):
     print("\n=== 보너스: 1차원 배열 최적화 비교 (%d회 반복 평균) ===" % repeat)
     print("%-8s %-12s %-12s %-12s %-8s %s" % ("크기", "2차원(ms)", "1차원(ms)", "펼침(ms)", "배율", "결과 일치"))
     for n in (3, 5, 13, 25):
-        pat = [[(i * n + j) % 3 * 0.5 for j in range(n)] for i in range(n)]
+        pat = make_x(n)  # 생성기 재사용
         filt = make_cross(n)
         pf, ff = flatten(pat), flatten(filt)
         t2 = measure_mac(pat, filt, repeat)
@@ -258,8 +266,47 @@ def flat_comparison_table(repeat=100):
             "%dx%d" % (n, n), t2, t1, tf, "%.2fx" % (t2 / t1), "O" if same else "X"))
 
 
+# ---------- 패턴 생성기: python3 main.py --gen [N] ----------
+def generate_by_name(text, n):
+    """'cross'/'+'/'x' 이름이면 n x n 생성 패턴을, 아니면 None을 반환 (모드 1에서 재사용)."""
+    try:
+        label = normalize_label(text)
+    except ValueError:
+        return None
+    return make_cross(n) if label == "Cross" else make_x(n)
+
+
+def print_matrix(m):
+    """모드 1에 그대로 붙여넣을 수 있게 공백 구분 숫자로 출력."""
+    for row in m:
+        print(" ".join(str(v) for v in row))
+
+
+def mode_generate(arg=None):
+    """크기 N을 받아 N x N 십자가(Cross)와 X 패턴을 생성해 출력한다."""
+    while True:
+        text = arg if arg is not None else input("패턴 크기 N (3 이상의 정수): ")
+        try:
+            n = int(str(text).strip())
+            if n < 3:
+                raise ValueError
+            break
+        except ValueError:
+            print("입력 오류: 3 이상의 정수를 입력하세요.")
+            if arg is not None:  # 인자로 받은 값이 잘못되면 재입력 대신 종료
+                return
+    print("\n[Cross %dx%d]" % (n, n))
+    print_matrix(make_cross(n))
+    print("\n[X %dx%d]" % (n, n))
+    print_matrix(make_x(n))
+
+
 # ---------- 진입점 ----------
 def main():
+    # 패턴 생성기: python3 main.py --gen [N]
+    if len(sys.argv) > 1 and sys.argv[1] in ("--gen", "-g"):
+        mode_generate(sys.argv[2] if len(sys.argv) > 2 else None)
+        return
     print("=== Mini NPU Simulator ===\n1. 사용자 입력 (3x3)\n2. data.json 분석")
     choice = input("모드 선택: ").strip()
     if choice == "1":
